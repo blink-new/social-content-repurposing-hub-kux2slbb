@@ -82,12 +82,75 @@ export function ContentConverter() {
     }
     
     const defaultPrompts = {
-      linkedin: `Convert this content into a professional LinkedIn post. Make it engaging, professional, and include relevant hashtags. Keep it concise but informative:\n\n${originalContent}`,
-      twitter: `Convert this content into an engaging X (Twitter) thread. Break it into multiple tweets if needed, each under 280 characters. Use engaging hooks and relevant hashtags:\n\n${originalContent}`,
-      instagram: `Convert this content into an Instagram post with engaging caption. Include relevant hashtags and make it visually appealing. Focus on storytelling. For carousel posts, structure content in slides:\n\n${originalContent}`,
-      tiktok: `Convert this content into a TikTok video script. Make it engaging, trendy, and include hooks, transitions, and call-to-actions. Focus on entertainment value. Structure as scenes for video creation:\n\n${originalContent}`,
-      threads: `Convert this content into a Threads post. Make it conversational, engaging, and authentic. Keep the tone casual but informative:\n\n${originalContent}`,
-      newsletter: `Convert this content into a newsletter format. Include a compelling subject line, structured sections, and a clear call-to-action:\n\n${originalContent}`
+      linkedin: `Transform this content into a professional LinkedIn post that drives engagement. Follow these guidelines:
+- Start with a compelling hook or question
+- Use short paragraphs for readability
+- Include 3-5 relevant hashtags at the end
+- Add a call-to-action (comment, share, connect)
+- Keep it under 1,300 characters
+- Use professional but conversational tone
+
+Content to transform:
+${originalContent}`,
+      
+      twitter: `Convert this content into an engaging X (Twitter) thread. Follow these rules:
+- Start with a strong hook in the first tweet
+- Break into multiple tweets, each under 280 characters
+- Number the tweets (1/n, 2/n, etc.)
+- Use line breaks for readability
+- Include relevant hashtags (2-3 max per tweet)
+- End with a call-to-action
+- Use emojis sparingly but effectively
+
+Content to transform:
+${originalContent}`,
+      
+      instagram: `Create an Instagram post caption that maximizes engagement:
+- Start with an attention-grabbing first line
+- Tell a story or share insights
+- Use line breaks for visual appeal
+- Include 5-10 relevant hashtags
+- Add a clear call-to-action
+- Keep it authentic and relatable
+- Consider adding emoji for personality
+
+Content to transform:
+${originalContent}`,
+      
+      tiktok: `Create a TikTok video script that's engaging and trendy:
+- Hook viewers in the first 3 seconds
+- Structure as scenes with clear transitions
+- Include trending phrases or sounds references
+- Add text overlay suggestions
+- Include call-to-actions (like, follow, comment)
+- Keep it entertaining and fast-paced
+- Suggest visual elements or props
+
+Content to transform:
+${originalContent}`,
+      
+      threads: `Convert this into a Threads post that feels authentic and conversational:
+- Use a casual, friendly tone
+- Keep it relatable and personal
+- Use natural language and contractions
+- Include relevant hashtags (2-4 max)
+- Encourage discussion with questions
+- Keep it under 500 characters for optimal engagement
+
+Content to transform:
+${originalContent}`,
+      
+      newsletter: `Transform this into a newsletter section with these elements:
+- Compelling subject line suggestion
+- Brief introduction/hook
+- Main content organized in clear sections
+- Key takeaways or bullet points
+- Clear call-to-action
+- Professional but friendly tone
+- Include suggested images or graphics
+
+Content to transform:
+${originalContent}`
     }
     return defaultPrompts[platform as keyof typeof defaultPrompts] || originalContent
   }
@@ -153,10 +216,30 @@ export function ContentConverter() {
   }
 
   const handleConvert = async () => {
-    if (!inputContent.trim() || selectedPlatforms.length === 0) {
+    // Validate input content
+    if (!inputContent.trim()) {
       toast({
-        title: "Missing Information",
-        description: "Please provide content and select at least one platform",
+        title: "Missing Content",
+        description: "Please provide content to convert",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (inputContent.trim().length < 20) {
+      toast({
+        title: "Content Too Short",
+        description: "Please provide at least 20 characters of content",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validate platform selection
+    if (selectedPlatforms.length === 0) {
+      toast({
+        title: "No Platforms Selected",
+        description: "Please select at least one platform to convert to",
         variant: "destructive"
       })
       return
@@ -171,26 +254,54 @@ export function ContentConverter() {
       // If URL input, extract content first
       if (inputType === 'url') {
         try {
-          // Validate URL format
+          // Validate URL format first
+          if (!inputContent.startsWith('http://') && !inputContent.startsWith('https://')) {
+            throw new Error('URL must start with http:// or https://')
+          }
+          
           const url = new URL(inputContent)
           
-          // Try scraping first for better content extraction
-          const { markdown, extract } = await blink.data.scrape(inputContent)
+          toast({
+            title: "Extracting Content",
+            description: "Fetching content from URL..."
+          })
           
-          // Use markdown content if available, otherwise fall back to extract
-          contentToConvert = markdown || extract.text || 'No content could be extracted from this URL'
+          // Try multiple extraction methods for better reliability
+          let extractedContent = ''
           
-          if (!contentToConvert || contentToConvert.trim().length < 50) {
-            // Fallback to extractFromUrl if scraping didn't get enough content
-            const fallbackContent = await blink.data.extractFromUrl(inputContent)
-            contentToConvert = fallbackContent || contentToConvert
+          try {
+            // Method 1: Try scraping first
+            const { markdown, extract } = await blink.data.scrape(inputContent)
+            extractedContent = markdown || extract?.text || ''
+          } catch (scrapeError) {
+            console.warn('Scraping failed, trying extraction:', scrapeError)
+            
+            try {
+              // Method 2: Fallback to direct extraction
+              extractedContent = await blink.data.extractFromUrl(inputContent)
+            } catch (extractError) {
+              console.error('Both scraping and extraction failed:', extractError)
+              throw new Error('Unable to extract content from this URL. The site may be blocking access or the content may not be publicly available.')
+            }
           }
+          
+          if (!extractedContent || extractedContent.trim().length < 20) {
+            throw new Error('No meaningful content could be extracted from this URL. Please try a different URL or paste the content directly.')
+          }
+          
+          contentToConvert = extractedContent
+          
+          toast({
+            title: "Content Extracted",
+            description: `Successfully extracted ${contentToConvert.length} characters`
+          })
           
         } catch (error) {
           console.error('URL extraction error:', error)
+          const errorMessage = error instanceof Error ? error.message : 'Failed to extract content from URL'
           toast({
-            title: "URL Error",
-            description: "Failed to extract content from URL. Please check the URL and try again.",
+            title: "URL Extraction Failed",
+            description: errorMessage,
             variant: "destructive"
           })
           setIsConverting(false)
@@ -198,40 +309,62 @@ export function ContentConverter() {
         }
       }
 
-      // Convert for each selected platform
-      const conversions = await Promise.all(
+      // Show conversion progress
+      toast({
+        title: "Converting Content",
+        description: `Generating content for ${selectedPlatforms.length} platform(s)...`
+      })
+
+      // Convert for each selected platform with better error handling
+      const conversions = await Promise.allSettled(
         selectedPlatforms.map(async (platform) => {
-          try {
-            const prompt = getPlatformPrompt(platform, contentToConvert)
-            const { text } = await blink.ai.generateText({
-              prompt,
-              model: 'gpt-4o-mini',
-              maxTokens: 1000
-            })
-            return { platform, content: text }
-          } catch (error) {
-            console.error(`Error converting for ${platform}:`, error)
-            return { platform, content: 'Error generating content for this platform.' }
-          }
+          const prompt = getPlatformPrompt(platform, contentToConvert)
+          const { text } = await blink.ai.generateText({
+            prompt,
+            model: 'gpt-4o-mini',
+            maxTokens: 1000
+          })
+          return { platform, content: text }
         })
       )
 
       const newResults: Record<string, string> = {}
-      conversions.forEach(({ platform, content }) => {
-        newResults[platform] = content
+      let successCount = 0
+      let errorCount = 0
+
+      conversions.forEach((result, index) => {
+        const platform = selectedPlatforms[index]
+        if (result.status === 'fulfilled') {
+          newResults[platform] = result.value.content
+          successCount++
+        } else {
+          console.error(`Error converting for ${platform}:`, result.reason)
+          newResults[platform] = `Error generating content for ${platform}. Please try again.`
+          errorCount++
+        }
       })
 
       setResults(newResults)
-      toast({
-        title: "Success!",
-        description: `Content converted for ${selectedPlatforms.length} platform(s)`
-      })
+      
+      if (successCount > 0) {
+        toast({
+          title: "Conversion Complete!",
+          description: `Successfully converted content for ${successCount} platform(s)${errorCount > 0 ? ` (${errorCount} failed)` : ''}`
+        })
+      } else {
+        toast({
+          title: "Conversion Failed",
+          description: "Failed to convert content for all platforms. Please try again.",
+          variant: "destructive"
+        })
+      }
 
     } catch (error) {
       console.error('Conversion error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
       toast({
         title: "Conversion Failed",
-        description: "An error occurred during conversion. Please try again.",
+        description: errorMessage,
         variant: "destructive"
       })
     } finally {
@@ -274,11 +407,22 @@ export function ContentConverter() {
                 <Label htmlFor="text-input">Content</Label>
                 <Textarea
                   id="text-input"
-                  placeholder="Paste your content here..."
+                  placeholder="Paste your content here... 
+
+Examples:
+• Blog post content
+• Newsletter text
+• Social media post
+• Article excerpt
+• Product description
+• Event announcement"
                   value={inputContent}
                   onChange={(e) => setInputContent(e.target.value)}
                   rows={8}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Minimum 20 characters required for conversion
+                </p>
               </TabsContent>
               
               <TabsContent value="url" className="space-y-2">
@@ -289,9 +433,20 @@ export function ContentConverter() {
                   value={inputContent}
                   onChange={(e) => setInputContent(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Supports articles, blog posts, social media posts, and more
-                </p>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <p>Supported URL types:</p>
+                  <ul className="list-disc list-inside space-y-1 ml-2">
+                    <li>Blog posts and articles</li>
+                    <li>LinkedIn posts and articles</li>
+                    <li>Medium articles</li>
+                    <li>News articles</li>
+                    <li>Company pages and press releases</li>
+                    <li>Product pages</li>
+                  </ul>
+                  <p className="mt-2 text-amber-600">
+                    Note: Some social media posts may be private or require login
+                  </p>
+                </div>
               </TabsContent>
             </Tabs>
 
@@ -377,23 +532,39 @@ export function ContentConverter() {
               )}
             </div>
 
-            <Button 
-              onClick={handleConvert} 
-              disabled={isConverting || !inputContent.trim() || selectedPlatforms.length === 0}
-              className="w-full"
-            >
-              {isConverting ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Converting...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4 mr-2" />
-                  Convert Content
-                </>
-              )}
-            </Button>
+            <div className="space-y-2">
+              <Button 
+                onClick={handleConvert} 
+                disabled={isConverting || !inputContent.trim() || selectedPlatforms.length === 0}
+                className="w-full"
+              >
+                {isConverting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Converting...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Convert Content
+                  </>
+                )}
+              </Button>
+              
+              {/* Quick Test Button */}
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setInputType('text')
+                  setInputContent('Artificial Intelligence is revolutionizing how we work and live. From automating routine tasks to enabling breakthrough discoveries in medicine and science, AI is becoming an essential tool for innovation. However, we must ensure AI development remains ethical and beneficial for all humanity.')
+                  setSelectedPlatforms(['linkedin', 'twitter'])
+                }}
+                className="w-full text-xs"
+              >
+                Load Test Content
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -462,7 +633,11 @@ export function ContentConverter() {
                       </div>
                       
                       <div className="bg-muted rounded p-3 mb-3">
-                        <pre className="whitespace-pre-wrap text-sm">{content}</pre>
+                        <div className="text-sm whitespace-pre-wrap leading-relaxed">{content}</div>
+                        <div className="mt-2 pt-2 border-t border-border/50 flex justify-between text-xs text-muted-foreground">
+                          <span>{content.length} characters</span>
+                          <span>{content.split(/\s+/).length} words</span>
+                        </div>
                       </div>
                       
                       {/* Show carousel if available */}
